@@ -1,9 +1,10 @@
 /* ── State ───────────────────────────────────────────────────────────────── */
-let currentJobId   = null;
-let pollInterval   = null;
-let elapsedTimer   = null;
-let elapsedSeconds = 0;
-let obsidianEnabled = false;
+let currentJobId      = null;
+let pollInterval      = null;
+let elapsedTimer      = null;
+let elapsedSeconds    = 0;
+let estimatedSeconds  = 0;
+let obsidianEnabled   = false;
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
@@ -85,7 +86,8 @@ async function uploadFile(file) {
       throw new Error(err.detail || "Erreur inconnue");
     }
     const data = await res.json();
-    currentJobId = data.job_id;
+    currentJobId     = data.job_id;
+    estimatedSeconds = data.estimated_seconds || 0;
     startPolling(file.name);
   } catch (err) {
     showError(`Erreur upload : ${err.message}`);
@@ -134,14 +136,19 @@ function startElapsedTimer() {
     const el = document.getElementById("elapsedTime");
     if (el) el.textContent = formatTime(elapsedSeconds);
 
-    // Estimation : ~3s/page en moyenne sur CPU, affiche après 10s
     const hint = document.getElementById("timeHint");
-    if (hint && elapsedSeconds >= 10) {
+    if (!hint) return;
+
+    if (estimatedSeconds > 0) {
       hint.style.display = "block";
-      const estRemaining = Math.max(0, Math.round((elapsedSeconds / 0.4) - elapsedSeconds));
-      hint.textContent = estRemaining > 5
-        ? `Estimation : encore ~${formatTime(estRemaining)}`
-        : "Finalisation…";
+      const remaining = estimatedSeconds - elapsedSeconds;
+      if (remaining > 5) {
+        hint.textContent = `Encore ~${formatTime(remaining)} estimé`;
+      } else if (remaining > -30) {
+        hint.textContent = "Finalisation…";
+      } else {
+        hint.textContent = "Plus long que prévu, patience…";
+      }
     }
   }, 1000);
 }

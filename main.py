@@ -105,12 +105,37 @@ async def convert(
         "step":       "En attente…",
     }
 
+    # Compte les pages avant de démarrer (pdfinfo disponible via poppler-utils)
+    page_count = await get_pdf_page_count(upload_path)
+    # ~4s/page sur CPU, +30s pour chargement des modèles au premier appel
+    estimated_seconds = page_count * 4 + 30 if page_count else 120
+
+    jobs[job_id]["page_count"]        = page_count
+    jobs[job_id]["estimated_seconds"] = estimated_seconds
+
     background_tasks.add_task(run_marker, job_id, upload_path, stem, model, obsidian)
-    logger.info(f"Job {job_id} créé pour '{file.filename}' ({len(content)//1024} KB) | obsidian={obsidian} | model={model}")
-    return {"job_id": job_id}
+    logger.info(f"Job {job_id} créé pour '{file.filename}' ({len(content)//1024} KB) | pages={page_count} | est={estimated_seconds}s")
+    return {"job_id": job_id, "page_count": page_count, "estimated_seconds": estimated_seconds}
 
 
 # ── Background conversion ─────────────────────────────────────────────────────
+async def get_pdf_page_count(pdf_path: Path) -> int:
+    """Retourne le nombre de pages via pdfinfo (poppler-utils)."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "pdfinfo", str(pdf_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        for line in stdout.decode().splitlines():
+            if line.startswith("Pages:"):
+                return int(line.split(":")[1].strip())
+    except Exception as e:
+        logger.warning(f"pdfinfo échoué : {e}")
+    return 0
+
+
 async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | None, obsidian: bool):
     job = jobs[job_id]
     job["status"]     = JobStatus.PROCESSING
@@ -181,11 +206,13 @@ async def status(job_id: str):
         elapsed = int(time.time() - job["started_at"])
 
     return {
-        "status":   job["status"],
-        "filename": job["filename"],
-        "elapsed":  elapsed,
-        "step":     job.get("step", ""),
-        "error":    job.get("error"),
+        "status":            job["status"],
+        "filename":          job["filename"],
+        "elapsed":           elapsed,
+        "estimated_seconds": job.get("estimated_seconds", 0),
+        "page_count":        job.get("page_count", 0),
+        "step":              job.get("step", ""),
+        "error":             job.get("error"),
     }
 
 
