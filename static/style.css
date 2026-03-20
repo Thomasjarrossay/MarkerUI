@@ -141,6 +141,23 @@ h1 {
   100% { transform: translateX(350%); }
 }
 
+.elapsed-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.elapsed-value { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 500; }
+
+.time-hint {
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-align: center;
+  padding: 2px 0;
+}
+
 .btn-download {
   display: flex;
   align-items: center;
