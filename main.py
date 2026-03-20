@@ -19,6 +19,7 @@ from enum import Enum
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from services.obsidian_formatter import format_for_obsidian
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -34,6 +35,17 @@ class JobStatus(str, Enum):
     ERROR      = "error"
 
 jobs: dict[str, dict] = {}
+
+# Modèles OpenRouter disponibles (pour l'API /api/models)
+AVAILABLE_MODELS = [
+    {"id": "google/gemini-flash-1.5",          "label": "Gemini Flash 1.5 (rapide, économique)"},
+    {"id": "google/gemini-pro-1.5",             "label": "Gemini Pro 1.5 (précis)"},
+    {"id": "anthropic/claude-3-5-haiku",        "label": "Claude 3.5 Haiku (rapide)"},
+    {"id": "anthropic/claude-3-5-sonnet",       "label": "Claude 3.5 Sonnet (équilibré)"},
+    {"id": "openai/gpt-4o-mini",                "label": "GPT-4o Mini (économique)"},
+    {"id": "openai/gpt-4o",                     "label": "GPT-4o (précis)"},
+    {"id": "meta-llama/llama-3.3-70b-instruct", "label": "Llama 3.3 70B (open source)"},
+]
 
 
 @asynccontextmanager
@@ -58,9 +70,21 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/api/models")
+async def get_models():
+    current = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
+    has_key  = bool(os.getenv("OPENROUTER_API_KEY", ""))
+    return {"models": AVAILABLE_MODELS, "current": current, "enabled": has_key}
+
+
 # ── Upload & start job ────────────────────────────────────────────────────────
 @app.post("/api/convert")
-async def convert(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def convert(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    model: str | None = None,
+    obsidian: bool = True,
+):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Seuls les fichiers PDF sont acceptés.")
 
@@ -72,21 +96,22 @@ async def convert(background_tasks: BackgroundTasks, file: UploadFile = File(...
     upload_path.write_bytes(content)
 
     jobs[job_id] = {
-        "status":   JobStatus.PENDING,
-        "filename": f"{stem}.zip",
-        "stem":     stem,
+        "status":     JobStatus.PENDING,
+        "filename":   f"{stem}.zip",
+        "stem":       stem,
         "started_at": None,
-        "elapsed":  0,
-        "error":    None,
+        "elapsed":    0,
+        "error":      None,
+        "step":       "En attente…",
     }
 
-    background_tasks.add_task(run_marker, job_id, upload_path, stem)
-    logger.info(f"Job {job_id} créé pour '{file.filename}' ({len(content)//1024} KB)")
+    background_tasks.add_task(run_marker, job_id, upload_path, stem, model, obsidian)
+    logger.info(f"Job {job_id} créé pour '{file.filename}' ({len(content)//1024} KB) | obsidian={obsidian} | model={model}")
     return {"job_id": job_id}
 
 
 # ── Background conversion ─────────────────────────────────────────────────────
-async def run_marker(job_id: str, upload_path: Path, stem: str):
+async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | None, obsidian: bool):
     job = jobs[job_id]
     job["status"]     = JobStatus.PROCESSING
     job["started_at"] = time.time()
@@ -96,6 +121,8 @@ async def run_marker(job_id: str, upload_path: Path, stem: str):
     output_subdir.mkdir(parents=True)
 
     try:
+        # ── Étape 1 : Conversion PDF → Markdown via Marker ────────────────
+        job["step"] = "Conversion PDF → Markdown…"
         proc = await asyncio.create_subprocess_exec(
             "marker_single",
             str(upload_path),
@@ -108,7 +135,18 @@ async def run_marker(job_id: str, upload_path: Path, stem: str):
         if proc.returncode != 0:
             raise RuntimeError(stderr.decode()[-600:])
 
-        # Zip
+        # ── Étape 2 : Formatage Obsidian via LLM (optionnel) ──────────────
+        if obsidian and os.getenv("OPENROUTER_API_KEY"):
+            job["step"] = "Formatage Obsidian via LLM…"
+            md_files = list(output_subdir.rglob("*.md"))
+            for md_path in md_files:
+                original = md_path.read_text(encoding="utf-8")
+                formatted = await format_for_obsidian(original, model)
+                md_path.write_text(formatted, encoding="utf-8")
+                logger.info(f"Formaté : {md_path.name}")
+
+        # ── Étape 3 : Création du zip ─────────────────────────────────────
+        job["step"] = "Création du zip…"
         zip_path = job_dir / f"{stem}.zip"
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in output_subdir.rglob("*"):
@@ -116,11 +154,13 @@ async def run_marker(job_id: str, upload_path: Path, stem: str):
                     zf.write(f, f.relative_to(output_subdir))
 
         job["status"]  = JobStatus.DONE
+        job["step"]    = "Terminé"
         job["elapsed"] = int(time.time() - job["started_at"])
         logger.info(f"Job {job_id} terminé en {job['elapsed']}s")
 
     except Exception as e:
         job["status"] = JobStatus.ERROR
+        job["step"]   = "Erreur"
         job["error"]  = str(e)
         logger.error(f"Job {job_id} échoué : {e}")
     finally:
@@ -144,6 +184,7 @@ async def status(job_id: str):
         "status":   job["status"],
         "filename": job["filename"],
         "elapsed":  elapsed,
+        "step":     job.get("step", ""),
         "error":    job.get("error"),
     }
 

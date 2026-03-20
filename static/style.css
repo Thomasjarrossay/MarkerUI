@@ -53,6 +53,77 @@ h1 {
   font-size: 0.9rem;
 }
 
+/* ── Settings Card ────────────────────────────────────────────────────────── */
+.settings-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.toggle-label { display: flex; flex-direction: column; gap: 2px; }
+.toggle-label span:first-child { font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.toggle-hint { font-size: 0.75rem; color: var(--text-muted); }
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--accent-glow);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+/* Toggle switch */
+.toggle { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.1);
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 16px; height: 16px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle input:checked + .toggle-slider { background: var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+.toggle input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }
+
+.model-row { display: flex; align-items: center; gap: 12px; }
+.model-label { font-size: 0.82rem; color: var(--text-muted); white-space: nowrap; }
+.model-select {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  outline: none;
+}
+.model-select:focus { border-color: var(--accent); }
+
 /* ── Drop Zone ────────────────────────────────────────────────────────────── */
 .drop-zone {
   background: var(--bg-card);
@@ -156,6 +227,14 @@ h1 {
   color: var(--accent);
   text-align: center;
   padding: 2px 0;
+}
+
+.step-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+  min-height: 1.2em;
 }
 
 .btn-download {

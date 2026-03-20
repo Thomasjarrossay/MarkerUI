@@ -3,6 +3,7 @@ let currentJobId   = null;
 let pollInterval   = null;
 let elapsedTimer   = null;
 let elapsedSeconds = 0;
+let obsidianEnabled = false;
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
@@ -19,7 +20,44 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   dropZone.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  loadModels();
+
+  document.getElementById("obsidianToggle").addEventListener("change", (e) => {
+    obsidianEnabled = e.target.checked;
+    document.getElementById("modelRow").style.display = obsidianEnabled ? "flex" : "none";
+  });
 });
+
+/* ── Load models from API ────────────────────────────────────────────────── */
+async function loadModels() {
+  try {
+    const res  = await fetch("/api/models");
+    const data = await res.json();
+    const toggle = document.getElementById("obsidianToggle");
+    const hint   = document.getElementById("obsidianHint");
+    const select = document.getElementById("modelSelect");
+
+    if (data.enabled) {
+      toggle.disabled  = false;
+      toggle.checked   = true;
+      obsidianEnabled  = true;
+      hint.textContent = "Formatage Obsidian activé";
+      document.getElementById("modelRow").style.display = "flex";
+
+      data.models.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = m.label;
+        if (m.id === data.current) opt.selected = true;
+        select.appendChild(opt);
+      });
+    } else {
+      toggle.disabled  = true;
+      hint.textContent = "Configurez OPENROUTER_API_KEY pour activer";
+    }
+  } catch (_) {}
+}
 
 /* ── File handling ───────────────────────────────────────────────────────── */
 function handleFile(file) {
@@ -37,8 +75,11 @@ async function uploadFile(file) {
   const formData = new FormData();
   formData.append("file", file);
 
+  const model    = document.getElementById("modelSelect")?.value || "";
+  const url      = `/api/convert?obsidian=${obsidianEnabled}${model ? `&model=${encodeURIComponent(model)}` : ""}`;
+
   try {
-    const res = await fetch("/api/convert", { method: "POST", body: formData });
+    const res = await fetch(url, { method: "POST", body: formData });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || "Erreur inconnue");
@@ -64,6 +105,9 @@ function startPolling(filename) {
       if (!res.ok) return;
       const data = await res.json();
 
+      if (data.step) {
+        document.getElementById("stepLabel").textContent = data.step;
+      }
       if (data.status === "done") {
         stopPolling();
         showSuccess(data.elapsed);
@@ -152,6 +196,7 @@ function reset() {
   document.getElementById("resetBtn").style.display    = "none";
   document.getElementById("elapsedRow").style.display  = "flex";
   document.getElementById("timeHint").style.display    = "none";
+  document.getElementById("stepLabel").textContent     = "";
   document.getElementById("dropZone").style.display    = "flex";
   document.getElementById("fileInput").value           = "";
 }

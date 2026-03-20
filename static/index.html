@@ -14,6 +14,24 @@
     </header>
 
     <main>
+      <!-- Settings -->
+      <div class="settings-card" id="settingsCard">
+        <div class="setting-row">
+          <label class="toggle-label">
+            <span>Formatage Obsidian <span class="badge" id="obsidianBadge">LLM</span></span>
+            <span class="toggle-hint" id="obsidianHint">Clé OpenRouter non configurée</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="obsidianToggle" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="model-row" id="modelRow" style="display:none">
+          <label class="model-label">Modèle</label>
+          <select id="modelSelect" class="model-select"></select>
+        </div>
+      </div>
+
       <!-- Drop zone -->
       <div class="drop-zone" id="dropZone">
         <div class="drop-icon">
@@ -46,6 +64,7 @@
           <span class="elapsed-value" id="elapsedTime">0s</span>
         </div>
         <p class="time-hint" id="timeHint" style="display:none"></p>
+        <p class="step-label" id="stepLabel"></p>
 
         <button class="btn-download" id="downloadBtn" style="display:none" onclick="downloadResult()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
