@@ -80,6 +80,40 @@
         </button>
       </div>
 
+      <!-- Stats -->
+      <div class="stats-section" id="statsSection">
+        <button class="stats-toggle" onclick="toggleStats()">
+          <span>Statistiques d'utilisation</span>
+          <span class="stats-chevron" id="statsChevron">▼</span>
+        </button>
+        <div class="stats-grid" id="statsGrid" style="display:none">
+          <div class="stat-card">
+            <span class="stat-value" id="statConversions">—</span>
+            <span class="stat-label">PDFs convertis</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="statPages">—</span>
+            <span class="stat-label">Pages traitées</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="statSize">—</span>
+            <span class="stat-label">Volume traité</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="statAvgTime">—</span>
+            <span class="stat-label">Durée moyenne</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="statLlmCalls">—</span>
+            <span class="stat-label">Appels LLM</span>
+          </div>
+          <div class="stat-card highlight">
+            <span class="stat-value" id="statCost">—</span>
+            <span class="stat-label">Coût LLM estimé</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Info -->
       <div class="info-grid">
         <div class="info-card">

@@ -20,6 +20,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from services.obsidian_formatter import format_for_obsidian
+from services.stats import record_conversion, record_llm_call, get_stats
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
@@ -175,8 +176,10 @@ async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | Non
             md_files = list(output_subdir.rglob("*.md"))
             for md_path in md_files:
                 original = md_path.read_text(encoding="utf-8")
-                formatted = await format_for_obsidian(original, model)
+                formatted, tok_in, tok_out = await format_for_obsidian(original, model)
                 md_path.write_text(formatted, encoding="utf-8")
+                if tok_in or tok_out:
+                    await record_llm_call(model or os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5"), tok_in, tok_out)
                 logger.info(f"Formaté : {md_path.name}")
 
         # ── Étape 3 : Création du zip ─────────────────────────────────────
@@ -187,16 +190,20 @@ async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | Non
                 if f.is_file():
                     zf.write(f, f.relative_to(output_subdir))
 
+        duration = int(time.time() - job["started_at"])
         job["status"]  = JobStatus.DONE
         job["step"]    = "Terminé"
-        job["elapsed"] = int(time.time() - job["started_at"])
-        logger.info(f"Job {job_id} terminé en {job['elapsed']}s")
+        job["elapsed"] = duration
+        logger.info(f"Job {job_id} terminé en {duration}s")
+        size_mb = upload_path.stat().st_size / 1_048_576 if upload_path.exists() else 0
+        await record_conversion(success=True, pages=job.get("page_count", 0), size_mb=size_mb, duration_s=duration)
 
     except Exception as e:
         job["status"] = JobStatus.ERROR
         job["step"]   = "Erreur"
         job["error"]  = str(e)
         logger.error(f"Job {job_id} échoué : {e}")
+        await record_conversion(success=False)
     finally:
         upload_path.unlink(missing_ok=True)
         if "started_at" in job and job["started_at"]:
@@ -240,6 +247,11 @@ async def download(job_id: str):
 
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
+@app.get("/api/stats")
+async def stats():
+    return get_stats()
+
+
 @app.delete("/api/job/{job_id}")
 async def cleanup_job(job_id: str):
     job_dir = OUTPUT_DIR / job_id

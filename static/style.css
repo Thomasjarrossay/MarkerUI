@@ -267,6 +267,59 @@ h1 {
 }
 .btn-reset:hover { border-color: var(--text-muted); color: var(--text); }
 
+/* ── Stats ────────────────────────────────────────────────────────────────── */
+.stats-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stats-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.stats-toggle:hover { background: rgba(255,255,255,0.03); }
+.stats-chevron { font-size: 0.7rem; color: var(--text-muted); transition: transform 0.2s; }
+.stats-chevron.open { transform: rotate(180deg); }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px;
+  background: var(--bg-surface);
+}
+.stat-card.highlight { background: rgba(99,102,241,0.05); }
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.stat-card.highlight .stat-value { color: var(--accent); }
+.stat-label { font-size: 0.72rem; color: var(--text-muted); text-align: center; }
+
 /* ── Info Grid ────────────────────────────────────────────────────────────── */
 .info-grid {
   display: flex;

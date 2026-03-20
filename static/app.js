@@ -30,6 +30,32 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+/* ── Stats ───────────────────────────────────────────────────────────────── */
+let statsOpen = false;
+
+function toggleStats() {
+  statsOpen = !statsOpen;
+  document.getElementById("statsGrid").style.display = statsOpen ? "grid" : "none";
+  document.getElementById("statsChevron").classList.toggle("open", statsOpen);
+  if (statsOpen) loadStats();
+}
+
+async function loadStats() {
+  try {
+    const res  = await fetch("/api/stats");
+    const s    = await res.json();
+
+    document.getElementById("statConversions").textContent = s.total_conversions ?? "0";
+    document.getElementById("statPages").textContent       = (s.total_pages ?? 0).toLocaleString();
+    document.getElementById("statSize").textContent        = `${(s.total_size_mb ?? 0).toFixed(1)} MB`;
+    document.getElementById("statAvgTime").textContent     = s.avg_duration_s ? formatTime(s.avg_duration_s) : "—";
+    document.getElementById("statLlmCalls").textContent    = s.llm_calls ?? "0";
+    document.getElementById("statCost").textContent        = s.llm_cost_usd
+      ? `$${s.llm_cost_usd.toFixed(4)}`
+      : "$0.00";
+  } catch (_) {}
+}
+
 /* ── Load models from API ────────────────────────────────────────────────── */
 async function loadModels() {
   try {

@@ -89,7 +89,10 @@ Rules:
 """
 
 
-async def format_for_obsidian(markdown_content: str, model: str | None = None) -> str:
+async def format_for_obsidian(markdown_content: str, model: str | None = None) -> tuple[str, int, int]:
+    """
+    Retourne (formatted_content, tokens_input, tokens_output).
+    """
     """
     Envoie le contenu Markdown à OpenRouter pour reformatage Obsidian.
 
@@ -100,7 +103,7 @@ async def format_for_obsidian(markdown_content: str, model: str | None = None) -
     api_key = os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
         logger.warning("OPENROUTER_API_KEY absent — formatage Obsidian ignoré.")
-        return markdown_content
+        return markdown_content, 0, 0
 
     selected_model = model or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
 
@@ -139,17 +142,19 @@ async def format_for_obsidian(markdown_content: str, model: str | None = None) -
             response.raise_for_status()
             data = response.json()
             formatted = data["choices"][0]["message"]["content"]
-            logger.info(f"Formatage Obsidian OK — modèle: {selected_model}")
+            usage = data.get("usage", {})
+            tokens_in  = usage.get("prompt_tokens", 0)
+            tokens_out = usage.get("completion_tokens", 0)
+            logger.info(f"Formatage Obsidian OK — modèle: {selected_model} | tokens: {tokens_in}→{tokens_out}")
 
-            # Recolle le reste du document si tronqué
             if tail:
                 formatted = formatted.rstrip() + "\n\n---\n\n" + tail
 
-            return formatted
+            return formatted, tokens_in, tokens_out
 
     except httpx.HTTPStatusError as e:
         logger.error(f"OpenRouter HTTP error {e.response.status_code}: {e.response.text[:300]}")
-        return markdown_content  # fallback : retourne l'original
+        return markdown_content, 0, 0
     except Exception as e:
         logger.error(f"Erreur formatage Obsidian : {e}")
-        return markdown_content  # fallback : retourne l'original
+        return markdown_content, 0, 0
