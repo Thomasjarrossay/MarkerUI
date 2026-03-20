@@ -120,14 +120,14 @@ async def convert(
 
 # ── Background conversion ─────────────────────────────────────────────────────
 async def get_pdf_page_count(pdf_path: Path) -> int:
-    """Retourne le nombre de pages via pdfinfo (poppler-utils)."""
+    """Retourne le nombre de pages via pdfinfo. Timeout 5s pour ne pas bloquer l'endpoint."""
     try:
         proc = await asyncio.create_subprocess_exec(
             "pdfinfo", str(pdf_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
         for line in stdout.decode().splitlines():
             if line.startswith("Pages:"):
                 return int(line.split(":")[1].strip())

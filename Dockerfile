@@ -22,7 +22,8 @@ RUN mkdir -p uploads_temp outputs
 
 # Pré-télécharge les modèles Marker au build (évite le cold start à chaque conversion)
 # Les modèles sont cachés dans /root/.cache/datalab/ et réutilisés au runtime.
-RUN python3 -c "from marker.models import create_model_dict; create_model_dict(); print('Marker models ready')"
+RUN python3 -c "from marker.models import create_model_dict; create_model_dict(); print('Marker models ready')" \
+    || echo "Model pre-warming failed — will download on first use"
 
 EXPOSE 8000
 
