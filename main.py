@@ -158,7 +158,16 @@ async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | Non
         stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise RuntimeError(stderr.decode()[-600:])
+            # stderr contient souvent les barres de progression tqdm — on cherche la vraie erreur
+            err_text = stderr.decode(errors="replace")
+            out_text = stdout.decode(errors="replace")
+            # Filtre les lignes tqdm (contiennent "|" et "%")
+            real_errors = [
+                l for l in (err_text + "\n" + out_text).splitlines()
+                if l.strip() and "|" not in l and "%" not in l and "Downloading" not in l
+            ]
+            error_msg = "\n".join(real_errors[-20:]) or err_text[-300:]
+            raise RuntimeError(error_msg)
 
         # ── Étape 2 : Formatage Obsidian via LLM (optionnel) ──────────────
         if obsidian and os.getenv("OPENROUTER_API_KEY"):

@@ -2,13 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Dépendances système (poppler pour PDF, libgomp pour PyTorch)
+# Dépendances système
 RUN apt-get update && apt-get install -y \
     libgomp1 \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# PyTorch CPU-only (évite de télécharger 2GB de CUDA inutile sur VPS)
+# PyTorch CPU-only
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Dépendances app
@@ -19,6 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN mkdir -p uploads_temp outputs
+
+# Pré-télécharge les modèles Marker au build (évite le cold start à chaque conversion)
+# Les modèles sont cachés dans /root/.cache/datalab/ et réutilisés au runtime.
+RUN python3 -c "from marker.models import create_model_dict; create_model_dict(); print('Marker models ready')"
 
 EXPOSE 8000
 
