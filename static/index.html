@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarkerUI — PDF → Markdown</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Marker<span class="accent">UI</span></h1>
+      <p class="subtitle">PDF → Markdown + images, prêt pour Obsidian</p>
+    </header>
+
+    <main>
+      <!-- Drop zone -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <p class="drop-text">Glisse un PDF ici</p>
+        <p class="drop-hint">ou</p>
+        <label class="btn-upload" for="fileInput">Parcourir</label>
+        <input type="file" id="fileInput" accept=".pdf" hidden />
+      </div>
+
+      <!-- Status -->
+      <div class="status-card" id="statusCard" style="display:none">
+        <div class="status-header">
+          <span class="status-icon" id="statusIcon">⏳</span>
+          <span class="status-label" id="statusLabel">Conversion en cours…</span>
+        </div>
+        <div class="progress-bar" id="progressBar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="status-file" id="statusFile"></p>
+
+        <button class="btn-download" id="downloadBtn" style="display:none" onclick="downloadResult()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Télécharger le .zip
+        </button>
+
+        <button class="btn-reset" id="resetBtn" style="display:none" onclick="reset()">
+          Convertir un autre PDF
+        </button>
+      </div>
+
+      <!-- Info -->
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-icon">📄</div>
+          <div>
+            <strong>Markdown structuré</strong>
+            <p>Chapitres, tableaux, équations préservés</p>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-icon">🖼️</div>
+          <div>
+            <strong>Images extraites</strong>
+            <p>Schémas et visuels sauvegardés séparément</p>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-icon">🧠</div>
+          <div>
+            <strong>Prêt pour Obsidian</strong>
+            <p>Glisse le .md dans ton vault, c'est tout</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
