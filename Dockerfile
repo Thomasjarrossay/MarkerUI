@@ -4,16 +4,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Dépendances système
+# poppler-utils : pdfinfo (page count) + pdfimages (extraction images)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# PyTorch CPU-only
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-
-# Dépendances app
+# Dépendances Python (plus de torch !)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

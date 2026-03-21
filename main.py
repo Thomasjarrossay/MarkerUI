@@ -1,8 +1,8 @@
 """
 MarkerUI — PDF to Markdown converter
 =====================================
-FastAPI backend wrapping marker-pdf.
 Architecture : upload → job en background → polling status → téléchargement zip.
+Conversion : Gemini Flash Vision (remplace Marker + PyTorch).
 """
 
 import os
@@ -19,6 +19,7 @@ from enum import Enum
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from services.gemini_converter import convert_pdf_to_markdown, extract_images
 from services.obsidian_formatter import format_for_obsidian
 from services.stats import record_conversion, record_llm_call, get_stats
 
@@ -114,14 +115,14 @@ async def convert(
     jobs[job_id]["page_count"]        = page_count
     jobs[job_id]["estimated_seconds"] = estimated_seconds
 
-    background_tasks.add_task(run_marker, job_id, upload_path, stem, model, obsidian)
+    background_tasks.add_task(run_conversion, job_id, upload_path, stem, model, obsidian)
     logger.info(f"Job {job_id} créé pour '{file.filename}' ({len(content)//1024} KB) | pages={page_count} | est={estimated_seconds}s")
     return {"job_id": job_id, "page_count": page_count, "estimated_seconds": estimated_seconds}
 
 
 # ── Background conversion ─────────────────────────────────────────────────────
 async def get_pdf_page_count(pdf_path: Path) -> int:
-    """Retourne le nombre de pages via pdfinfo. Timeout 5s pour ne pas bloquer l'endpoint."""
+    """Retourne le nombre de pages via pdfinfo. Timeout 5s."""
     try:
         proc = await asyncio.create_subprocess_exec(
             "pdfinfo", str(pdf_path),
@@ -137,7 +138,7 @@ async def get_pdf_page_count(pdf_path: Path) -> int:
     return 0
 
 
-async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | None, obsidian: bool):
+async def run_conversion(job_id: str, upload_path: Path, stem: str, model: str | None, obsidian: bool):
     job = jobs[job_id]
     job["status"]     = JobStatus.PROCESSING
     job["started_at"] = time.time()
@@ -147,42 +148,28 @@ async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | Non
     output_subdir.mkdir(parents=True)
 
     try:
-        # ── Étape 1 : Conversion PDF → Markdown via Marker ────────────────
-        job["step"] = "Conversion PDF → Markdown…"
-        proc = await asyncio.create_subprocess_exec(
-            "marker_single",
-            str(upload_path),
-            "--output_dir", str(output_subdir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
+        # ── Étape 1 : Conversion PDF → Markdown via Gemini Vision ─────────
+        markdown = await convert_pdf_to_markdown(upload_path, job)
+        md_path  = output_subdir / f"{stem}.md"
+        md_path.write_text(markdown, encoding="utf-8")
 
-        if proc.returncode != 0:
-            # stderr contient souvent les barres de progression tqdm — on cherche la vraie erreur
-            err_text = stderr.decode(errors="replace")
-            out_text = stdout.decode(errors="replace")
-            # Filtre les lignes tqdm (contiennent "|" et "%")
-            real_errors = [
-                l for l in (err_text + "\n" + out_text).splitlines()
-                if l.strip() and "|" not in l and "%" not in l and "Downloading" not in l
-            ]
-            error_msg = "\n".join(real_errors[-20:]) or err_text[-300:]
-            raise RuntimeError(error_msg)
+        # ── Étape 2 : Extraction des images réelles ────────────────────────
+        job["step"] = "Extraction des images…"
+        await extract_images(upload_path, output_subdir)
 
-        # ── Étape 2 : Formatage Obsidian via LLM (optionnel) ──────────────
+        # ── Étape 3 : Formatage Obsidian via LLM (optionnel) ──────────────
         if obsidian and os.getenv("OPENROUTER_API_KEY"):
             job["step"] = "Formatage Obsidian via LLM…"
-            md_files = list(output_subdir.rglob("*.md"))
-            for md_path in md_files:
-                original = md_path.read_text(encoding="utf-8")
-                formatted, tok_in, tok_out = await format_for_obsidian(original, model)
-                md_path.write_text(formatted, encoding="utf-8")
-                if tok_in or tok_out:
-                    await record_llm_call(model or os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5"), tok_in, tok_out)
-                logger.info(f"Formaté : {md_path.name}")
+            original = md_path.read_text(encoding="utf-8")
+            formatted, tok_in, tok_out = await format_for_obsidian(original, model)
+            md_path.write_text(formatted, encoding="utf-8")
+            if tok_in or tok_out:
+                await record_llm_call(
+                    model or os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5"),
+                    tok_in, tok_out
+                )
 
-        # ── Étape 3 : Création du zip ─────────────────────────────────────
+        # ── Étape 4 : Zip ─────────────────────────────────────────────────
         job["step"] = "Création du zip…"
         zip_path = job_dir / f"{stem}.zip"
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -191,12 +178,13 @@ async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | Non
                     zf.write(f, f.relative_to(output_subdir))
 
         duration = int(time.time() - job["started_at"])
-        job["status"]  = JobStatus.DONE
-        job["step"]    = "Terminé"
-        job["elapsed"] = duration
-        logger.info(f"Job {job_id} terminé en {duration}s")
+        job["status"]   = JobStatus.DONE
+        job["step"]     = "Terminé"
+        job["elapsed"]  = duration
+        job["progress"] = 100
         size_mb = upload_path.stat().st_size / 1_048_576 if upload_path.exists() else 0
         await record_conversion(success=True, pages=job.get("page_count", 0), size_mb=size_mb, duration_s=duration)
+        logger.info(f"Job {job_id} terminé en {duration}s")
 
     except Exception as e:
         job["status"] = JobStatus.ERROR
@@ -206,7 +194,7 @@ async def run_marker(job_id: str, upload_path: Path, stem: str, model: str | Non
         await record_conversion(success=False)
     finally:
         upload_path.unlink(missing_ok=True)
-        if "started_at" in job and job["started_at"]:
+        if job.get("started_at"):
             job["elapsed"] = int(time.time() - job["started_at"])
 
 
